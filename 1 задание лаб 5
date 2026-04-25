@@ -1,0 +1,37 @@
+#include <stdio.h>
+
+// Функция для нахождения наибольшего общего делителя (НОД)
+long long gcd(long long a, long long b) {
+    while (b != 0) {
+        long long temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+int main() {
+    long long N, M;
+    
+    // Чтение входных данных
+    scanf("%lld %lld", &N, &M);
+    
+    // Производительность первой трубы: 1/M бассейна в секунду
+    // Совместная производительность: 1/N бассейна в секунду
+    // Производительность второй трубы: 1/N - 1/M = (M - N) / (N * M)
+    
+    long long numerator = N * M;      // числитель (время для второй трубы)
+    long long denominator = M - N;    // знаменатель
+    
+    // Время наполнения второй трубы = числитель / знаменатель = (N*M) / (M-N)
+    
+    // Сокращаем дробь
+    long long g = gcd(numerator, denominator);
+    numerator /= g;
+    denominator /= g;
+    
+    // Вывод результата
+    printf("%lld/%lld\n", numerator, denominator);
+    
+    return 0;
+}
