@@ -1,0 +1,110 @@
+вот что оно мне выдало
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+typedef struct point {
+    double x, y;
+    int num;
+} POINT;
+
+POINT p[100000], hull[100000];
+int hull_cnt = 0;
+
+// Сортировка по координате X
+int cmp_x(const void *a, const void *b) {
+    POINT *pa = (POINT*)a, *pb = (POINT*)b;
+    return (pa->x > pb->x) - (pa->x < pb->x);
+}
+
+// Вспомогательная функция: векторное произведение (B-A)×(C-A)
+// >0: C слева от AB, <0: C справа, =0: коллинеарны
+double cross(POINT A, POINT B, POINT C) {
+    return (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
+}
+
+// Рекурсивная часть QuickHull
+void quickhull(POINT *pts, int n, POINT A, POINT B, int side) {
+    if (n <= 0) return;
+    
+    // Поиск самой удалённой точки от отрезка AB на нужной стороне
+    int idx = -1;
+    double max_dist = -1;
+    for (int i = 0; i < n; i++) {
+        double cr = cross(A, B, pts[i]);
+        if ((side == 1 && cr > 0) || (side == -1 && cr < 0)) {
+            double d = fabs(cr); // расстояние пропорционально |cross|
+            if (d > max_dist) { max_dist = d; idx = i; }
+        }
+    }
+    if (idx == -1) return; // нет точек с нужной стороны
+    
+    POINT C = pts[idx];
+    
+    // Разбиение: точки вне треугольника ABC
+    POINT *tmp = malloc(n * sizeof(POINT));
+    int cnt = 0;
+    for (int i = 0; i < n; i++) {
+        if (i == idx) continue;
+        if (cross(A, C, pts[i]) * side > 0) tmp[cnt++] = pts[i];
+    }
+    quickhull(tmp, cnt, A, C, side);    
+    hull[hull_cnt++] = C; // добавляем вершину в оболочку
+    
+    cnt = 0;
+    for (int i = 0; i < n; i++) {
+        if (i == idx) continue;
+        if (cross(C, B, pts[i]) * side > 0) tmp[cnt++] = pts[i];
+    }
+    quickhull(tmp, cnt, C, B, side);
+    
+    free(tmp);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
+    
+    FILE *In = fopen(argv[1], "r");
+    FILE *Out = fopen("OUT.dat", "w");
+    if (!In || !Out) { perror("File error"); return 1; }
+    
+    int n = 0, num;
+    double x, y;
+    while (fscanf(In, "%d%lf%lf", &num, &x, &y) == 3) {
+        p[n].num = num; p[n].x = x; p[n].y = y;
+        n++;
+    }
+    fclose(In);
+    
+    // Сортировка по X (требование задания)
+    qsort(p, n, sizeof(POINT), cmp_x);
+    
+    POINT A = p[0], B = p[n-1];
+    hull[hull_cnt++] = A; // левая крайняя точка
+    
+    // Разделение точек относительно отрезка AB
+    POINT *above = malloc(n * sizeof(POINT));
+    POINT *below = malloc(n * sizeof(POINT));
+    int na = 0, nb = 0;
+    for (int i = 1; i < n-1; i++) {
+        double cr = cross(A, B, p[i]);
+        if (cr > 1e-9) above[na++] = p[i];
+        else if (cr < -1e-9) below[nb++] = p[i];
+    }
+    
+    // Построение верхней и нижней частей оболочки
+    quickhull(above, na, A, B, 1);   // выше AB
+    hull[hull_cnt++] = B;            // правая крайняя точка    quickhull(below, nb, B, A, 1);   // ниже AB
+    
+    // Вывод номеров точек выпуклой оболочки
+    for (int i = 0; i < hull_cnt; i++)
+        fprintf(Out, "%d\n", hull[i].num);
+    
+    fclose(Out);
+    free(above); free(below);
+    return 0;
+}
