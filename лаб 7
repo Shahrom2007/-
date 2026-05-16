@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Использование: %s <input.fa>\n", argv[0]);
+        return 1;
+    }
+
+    FILE *fin = fopen(argv[1], "r");
+    if (!fin) {
+        perror("Error");
+        return 1;
+    }
+
+    FILE *fout = fopen("compressed.bin", "wb");
+    if (!fout) {
+        perror("Error file");
+        fclose(fin);
+        return 1;
+    }
+
+    long long cnt_A = 0, cnt_C = 0, cnt_G = 0, cnt_T = 0, cnt_N = 0;
+
+ 
+    uint64_t base_buf = 0; 
+    int base_bits = 0;
+
+    uint64_t mask_buf = 0; 
+    int mask_bits = 0;
+
+    int c;
+    while ((c = fgetc(fin)) != EOF) {
+     
+        if (c == '\n' || c == '\r') continue;
+        
+
+        if (c == '>') {
+            while ((c = fgetc(fin)) != '\n' && c != EOF) {}
+            continue;
+        }
+
+        char ch = (char)c;
+        uint64_t base_code = 0;
+        int is_n = 0;
+
+        switch (ch) {
+            case 'A': case 'a': cnt_A++; base_code = 0; break;
+            case 'C': case 'c': cnt_C++; base_code = 1; break;
+            case 'G': case 'g': cnt_G++; base_code = 2; break;
+            case 'T': case 't': cnt_T++; base_code = 3; break;
+            case 'N': case 'n': cnt_N++; is_n = 1; break;
+            default: continue; 
+        }
+
+        base_buf = (base_buf << 2) | base_code;
+        base_bits += 2;
+
+
+        mask_buf = (mask_buf << 1) | is_n;
+        mask_bits++;
+
+        if (base_bits == 64) {
+            long long out_val = (long long)base_buf;
+            fwrite(&out_val, sizeof(long long), 1, fout);
+            base_buf = 0;
+            base_bits = 0;
+        }
+        if (mask_bits == 64) {
+            long long out_val = (long long)mask_buf;
+            fwrite(&out_val, sizeof(long long), 1, fout);
+            mask_buf = 0;
+            mask_bits = 0;
+        }
+    }
+
+    if (base_bits > 0) {
+        base_buf <<= (64 - base_bits);
+        long long out_val = (long long)base_buf;
+        fwrite(&out_val, sizeof(long long), 1, fout);
+    }
+    if (mask_bits > 0) {
+        mask_buf <<= (64 - mask_bits);
+        long long out_val = (long long)mask_buf;
+        fwrite(&out_val, sizeof(long long), 1, fout);
+    }
+
+    fclose(fin);
+    fclose(fout);
+
+    printf("A (Аденин)  : %lld\n", cnt_A);
+    printf("C (Цитозин) : %lld\n", cnt_C);
+    printf("G (Гуанин)  : %lld\n", cnt_G);
+    printf("T (Тимин)   : %lld\n", cnt_T);
+    printf("N (Неизв.)  : %lld\n", cnt_N);
+    printf("Всего       : %lld\n", cnt_A + cnt_C + cnt_G + cnt_T + cnt_N);
+    printf("result in compressed.bin\n");
+
+    return 0;
+}
