@@ -1,0 +1,120 @@
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xos.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+
+// Компиляция: gcc tree.c -o tree -lX11 -lm
+
+/* Переменные для X11 */
+Display *dis;
+int screen;
+Window win;
+GC gc;
+
+/* Параметры окна */
+#define WIN_WIDTH 800
+#define WIN_HEIGHT 500
+
+/* Цвета */
+unsigned long COLOR_GREEN_DARK;
+unsigned long COLOR_GREEN_MEDIUM;
+unsigned long COLOR_GREEN_LIGHT;
+unsigned long COLOR_BROWN;
+unsigned long COLOR_BLACK;
+unsigned long COLOR_WHITE;
+
+/* Структура дерева */
+typedef struct {
+    int x, y;           // позиция основания
+    int height;         // общая высота
+    int base_width;     // ширина нижнего яруса
+    int filled;         // 0 = контур, 1 = закрашена
+} Tree;
+
+#define MAX_TREES 5
+Tree trees[MAX_TREES];
+int tree_count = 0;
+
+/* Инициализация цветов */
+void get_colors() {
+    XColor tmp;
+    Colormap cmap = DefaultColormap(dis, screen);
+    
+    XParseColor(dis, cmap, "dark green", &tmp);      XAllocColor(dis, cmap, &tmp); COLOR_GREEN_DARK = tmp.pixel;
+    XParseColor(dis, cmap, "forest green", &tmp);    XAllocColor(dis, cmap, &tmp); COLOR_GREEN_MEDIUM = tmp.pixel;
+    XParseColor(dis, cmap, "lime green", &tmp);      XAllocColor(dis, cmap, &tmp); COLOR_GREEN_LIGHT = tmp.pixel;
+    XParseColor(dis, cmap, "saddle brown", &tmp);    XAllocColor(dis, cmap, &tmp); COLOR_BROWN = tmp.pixel;
+        COLOR_BLACK = BlackPixel(dis, screen);
+    COLOR_WHITE = WhitePixel(dis, screen);
+}
+
+/* Нарисовать контур ёлки (3 треугольника + ствол) */
+void draw_tree_outline(Tree *t) {
+    XPoint tier[4];  // +1 для замыкания
+    int h1 = t->height / 3;
+    int h2 = h1 * 2;
+    int h3 = t->height;
+    int w1 = t->base_width;
+    int w2 = t->base_width * 2 / 3;
+    int w3 = t->base_width * 1 / 3;
+    
+    XSetForeground(dis, gc, COLOR_BLACK);
+    
+    // Ствол (контур)
+    int trunk_w = t->base_width / 5;
+    if (trunk_w < 4) trunk_w = 4;
+    XDrawRectangle(dis, win, gc,
+                   t->x - trunk_w/2, t->y - t->height/6,
+                   trunk_w, t->height/6);
+    
+    // Нижний ярус
+    tier[0].x = t->x;              tier[0].y = t->y - h1;
+    tier[1].x = t->x - w1/2;       tier[1].y = t->y;
+    tier[2].x = t->x + w1/2;       tier[2].y = t->y;
+    tier[3] = tier[0];
+    XDrawLines(dis, win, gc, tier, 4, CoordModeOrigin);
+    
+    // Средний ярус
+    tier[0].x = t->x;              tier[0].y = t->y - h2;
+    tier[1].x = t->x - w2/2;       tier[1].y = t->y - h1 + 10;
+    tier[2].x = t->x + w2/2;       tier[2].y = t->y - h1 + 10;
+    tier[3] = tier[0];
+    XDrawLines(dis, win, gc, tier, 4, CoordModeOrigin);
+    
+    // Верхний ярус
+    tier[0].x = t->x;              tier[0].y = t->y - h3;
+    tier[1].x = t->x - w3/2;       tier[1].y = t->y - h2 + 10;
+    tier[2].x = t->x + w3/2;       tier[2].y = t->y - h2 + 10;
+    tier[3] = tier[0];
+    XDrawLines(dis, win, gc, tier, 4, CoordModeOrigin);
+}
+
+/* Нарисовать закрашенную ёлку */
+void draw_tree_filled(Tree *t) {
+    XPoint tier[3];
+    int h1 = t->height / 3;
+    int h2 = h1 * 2;    int h3 = t->height;
+    int w1 = t->base_width;
+    int w2 = t->base_width * 2 / 3;
+    int w3 = t->base_width * 1 / 3;
+    
+    // Ствол
+    XSetForeground(dis, gc, COLOR_BROWN);
+    int trunk_w = t->base_width / 5;
+    if (trunk_w < 4) trunk_w = 4;
+    XFillRectangle(dis, win, gc,
+                   t->x - trunk_w/2, t->y - t->height/6,
+                   trunk_w, t->height/6);
+    
+    // Нижний ярус
+    XSetForeground(dis, gc, COLOR_GREEN_DARK);
+    tier[0].x = t->x;              tier[0].y = t->y - h1;
+    tier[1].x = t->x - w1/2;       tier[1].y = t->y;
+    tier[2].x = t->x + w1/2;       tier[2].y = t->y;
+    XFillPolygon(dis, win, gc, tier, 3, Convex, CoordModeOrigin);
+    
+    // Средний ярус
+    XSetForeground(dis, gc, COLOR_GREEN_MEDIUM);
