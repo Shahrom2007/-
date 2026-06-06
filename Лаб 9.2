@@ -1,0 +1,85 @@
+XNextEvent(dis, &event);
+        
+        if (event.type == Expose && event.xexpose.count == 0) {
+            redraw();
+        }
+        
+        if (event.type == KeyPress && XLookupString(&event.xkey, text, 255, &key, 0) == 1) {
+            if (text[0] == 'q' || text[0] == 'Q') close_x();
+            if (text[0] == 'r' || text[0] == 'R') {
+                tree_count = 0;
+                for (int i = 0; i < MAX_TREES; i++) generate_tree();                redraw();
+            }
+            printf("Клавиша '%c'\n", text[0]);
+        }
+        
+        if (event.type == ButtonPress) {
+            int x = event.xbutton.x;
+            int y = event.xbutton.y;
+            
+            // ЛКМ: окрасить дерево при клике
+            if (event.xbutton.button == 1) {
+                for (int i = 0; i < tree_count; i++) {
+                    if (click_on_tree(x, y, &trees[i])) {
+                        trees[i].filled = 1;
+                        draw_tree_filled(&trees[i]);
+                        XFlush(dis);
+                        printf("Дерево #%d окрашено\n", i+1);
+                        break;
+                    }
+                }
+            }
+            // ПКМ: заменить случайное дерево на новое
+            else if (event.xbutton.button == 3) {
+                if (tree_count > 0) {
+                    int idx = rand() % tree_count;
+                    // Удаляем дерево [idx], сдвигаем массив
+                    for (int i = idx; i < tree_count - 1; i++) {
+                        trees[i] = trees[i+1];
+                    }
+                    tree_count--;
+                    // Добавляем новое
+                    if (generate_tree()) {
+                        redraw();
+                        printf("Дерево заменено (новое на позиции #%d)\n", tree_count);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void init_x() {
+    dis = XOpenDisplay(NULL);
+    if (!dis) { fprintf(stderr, "Ошибка XOpenDisplay\n"); exit(1); }
+    
+    screen = DefaultScreen(dis);
+    unsigned long black = BlackPixel(dis, screen);
+    unsigned long white = WhitePixel(dis, screen);
+        win = XCreateSimpleWindow(dis, DefaultRootWindow(dis), 10, 10,
+                              WIN_WIDTH, WIN_HEIGHT, 2, black, white);
+    XSetStandardProperties(dis, win, "Ёлки: клик для окраски", "Tree Demo", None, NULL, 0, NULL);
+    XSelectInput(dis, win, ExposureMask | ButtonPressMask | KeyPressMask);
+    
+    gc = XCreateGC(dis, win, 0, NULL);
+    XSetBackground(dis, gc, white);
+    XSetForeground(dis, gc, black);
+    
+    XClearWindow(dis, win);
+    XMapRaised(dis, win);
+    get_colors();
+}
+
+void close_x() {
+    XFreeGC(dis, gc);
+    XDestroyWindow(dis, win);
+    XCloseDisplay(dis);
+    exit(0);
+}
+
+void redraw() {
+    XClearWindow(dis, win);
+    draw_all_trees();
+    XFlush(dis);
+}
