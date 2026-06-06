@@ -1,0 +1,115 @@
+tier[0].x = t->x;              tier[0].y = t->y - h2;
+    tier[1].x = t->x - w2/2;       tier[1].y = t->y - h1 + 10;
+    tier[2].x = t->x + w2/2;       tier[2].y = t->y - h1 + 10;
+    XFillPolygon(dis, win, gc, tier, 3, Convex, CoordModeOrigin);
+    
+    // Верхний ярус
+    XSetForeground(dis, gc, COLOR_GREEN_LIGHT);
+    tier[0].x = t->x;              tier[0].y = t->y - h3;
+    tier[1].x = t->x - w3/2;       tier[1].y = t->y - h2 + 10;
+    tier[2].x = t->x + w3/2;       tier[2].y = t->y - h2 + 10;
+    XFillPolygon(dis, win, gc, tier, 3, Convex, CoordModeOrigin);
+    
+    // Контур поверх заливки для чёткости
+    draw_tree_outline(t);
+}
+
+/* Получить ограничивающий прямоугольник дерева */
+void get_tree_bounds(Tree *t, int *x1, int *y1, int *x2, int *y2) {
+    *x1 = t->x - t->base_width/2 - 5;
+    *x2 = t->x + t->base_width/2 + 5;
+    *y1 = t->y - t->height - 5;
+    *y2 = t->y + 5;
+}
+
+/* Проверка: точка (px,py) внутри треугольника (метод площадей) */
+int point_in_triangle(int px, int py, int x1,int y1, int x2,int y2, int x3,int y3) {
+    // Барицентрические координаты
+    int denom = ((y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3));    if (denom == 0) return 0;
+    int a = ((y2 - y3)*(px - x3) + (x3 - x2)*(py - y3)) / (float)denom;
+    int b = ((y3 - y1)*(px - x3) + (x1 - x3)*(py - y3)) / (float)denom;
+    int c = 1 - a - b;
+    return (a >= -1 && a <= 2 && b >= -1 && b <= 2 && c >= -1 && c <= 2);
+}
+
+/* Проверка: клик попал в дерево */
+int click_on_tree(int px, int py, Tree *t) {
+    int h1 = t->height / 3;
+    int h2 = h1 * 2;
+    int h3 = t->height;
+    int w1 = t->base_width;
+    int w2 = t->base_width * 2 / 3;
+    int w3 = t->base_width * 1 / 3;
+    
+    // Проверка ствола
+    int trunk_w = t->base_width / 5;
+    if (trunk_w < 4) trunk_w = 4;
+    if (px >= t->x - trunk_w/2 && px <= t->x + trunk_w/2 &&
+        py >= t->y - t->height/6 && py <= t->y) return 1;
+    
+    // Проверка ярусов
+    if (point_in_triangle(px, py, t->x, t->y - h1, t->x - w1/2, t->y, t->x + w1/2, t->y)) return 1;
+    if (point_in_triangle(px, py, t->x, t->y - h2, t->x - w2/2, t->y - h1 + 10, t->x + w2/2, t->y - h1 + 10)) return 1;
+    if (point_in_triangle(px, py, t->x, t->y - h3, t->x - w3/2, t->y - h2 + 10, t->x + w3/2, t->y - h2 + 10)) return 1;
+    
+    return 0;
+}
+
+/* Проверка перекрытия деревьев */
+int trees_overlap(Tree *a, Tree *b) {
+    int ax1, ay1, ax2, ay2, bx1, by1, bx2, by2;
+    get_tree_bounds(a, &ax1, &ay1, &ax2, &ay2);
+    get_tree_bounds(b, &bx1, &by1, &bx2, &by2);
+    if (ax2 < bx1  bx2 < ax1  ay2 < by1 || by2 < ay1) return 0;
+    return 1;
+}
+
+int check_collision(Tree *new_tree) {
+    for (int i = 0; i < tree_count; i++) {
+        if (trees_overlap(new_tree, &trees[i])) return 1;
+    }
+    return 0;
+}
+
+/* Сгенерировать новое дерево */
+int generate_tree() {
+    if (tree_count >= MAX_TREES) return 0;
+    Tree t;    int attempts = 0;
+    do {
+        t.base_width = rand() % 40 + 40;
+        t.height = rand() % 60 + 90;
+        t.x = rand() % (WIN_WIDTH - t.base_width - 40) + t.base_width/2 + 20;
+        t.y = rand() % (WIN_HEIGHT - t.height - 30) + t.height + 20;
+        t.filled = 0;  // изначально контур
+        if (++attempts > 3000) return 0;
+    } while (check_collision(&t));
+    trees[tree_count++] = t;
+    return 1;
+}
+
+/* Перерисовать все деревья */
+void draw_all_trees() {
+    for (int i = 0; i < tree_count; i++) {
+        if (trees[i].filled) draw_tree_filled(&trees[i]);
+        else draw_tree_outline(&trees[i]);
+    }
+}
+
+/* Прототипы */
+void init_x(void);
+void close_x(void);
+void redraw(void);
+
+int main() {
+    XEvent event;
+    KeySym key;
+    char text[255];
+
+    srand(time(NULL));
+    init_x();
+    
+    // Генерация 5 стартовых деревьев
+    for (int i = 0; i < MAX_TREES; i++) generate_tree();
+    redraw();
+    
+    while (1) {
